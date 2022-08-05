@@ -10,6 +10,9 @@ import org.springframework.util.StringUtils;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
+import org.springframework.validation.ValidationUtils;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
@@ -24,6 +27,12 @@ import java.util.Map;
 public class ValidationItemControllerV2 {
 
     private final ItemRepository itemRepository;
+    private final ItemValidator itemValidator;
+
+    @InitBinder
+    public void init(WebDataBinder webDataBinder){ // 컨트롤러 호출시마다 밑에 있는 로직을 수행한다. 즉 호출기 미리 등록해둠
+        webDataBinder.addValidators(itemValidator);
+    }
 
     @GetMapping
     public String items(Model model) {
@@ -176,7 +185,7 @@ public class ValidationItemControllerV2 {
     // rejectValue의 경우 field에러면 rejectValue(필드명,에러메시지,파라미터{new Object[]로 해야함})
     // 단 에러메시지의 경우 required라고 지정하면 required.+ModelAttribute의 이름(item). + 필드명이 자동으로 붙는다
     // 예를들어 required라고 하면 required.item(ModelAttribute이름).itemName(field명)이다.
-    @PostMapping("/add")
+    //@PostMapping("/add")
     public String addItemV4(@ModelAttribute Item item, BindingResult bindingResult, RedirectAttributes redirectAttributes, Model model) {
         if(!StringUtils.hasText(item.getItemName())){
             bindingResult.rejectValue("itemName","required"); // rejectValue는 사실상 new FieldError를 만들어줌
@@ -196,6 +205,36 @@ public class ValidationItemControllerV2 {
             }
         }
 
+        // 검증에 실패하면 다시 입력 폼으로
+        if(bindingResult.hasErrors()){ // 에러가 있다면
+            return "validation/v2/addForm"; // 스프링에서 제공하는 bindingResult는 자동으로 모델에 담겨짐
+        }
+
+        // 검증 성공시 PRG 패턴 적용됨
+        Item savedItem = itemRepository.save(item);
+        redirectAttributes.addAttribute("itemId", savedItem.getId());
+        redirectAttributes.addAttribute("status", true);
+        return "redirect:/validation/v2/items/{itemId}";
+    }
+
+    //@PostMapping("/add")
+    public String addItemV5(@ModelAttribute Item item, BindingResult bindingResult, RedirectAttributes redirectAttributes, Model model) {
+        itemValidator.validate(item,bindingResult); // 오브젝트와 bindingResult를 넘겨주면 됨
+
+        // 검증에 실패하면 다시 입력 폼으로
+        if(bindingResult.hasErrors()){ // 에러가 있다면
+            return "validation/v2/addForm"; // 스프링에서 제공하는 bindingResult는 자동으로 모델에 담겨짐
+        }
+
+        // 검증 성공시 PRG 패턴 적용됨
+        Item savedItem = itemRepository.save(item);
+        redirectAttributes.addAttribute("itemId", savedItem.getId());
+        redirectAttributes.addAttribute("status", true);
+        return "redirect:/validation/v2/items/{itemId}";
+    }
+
+    @PostMapping("/add") // 검증수행할 객체 앞에 @Validated를 붙여야 한다(검증기가 여러개면 support를 통해 적합한 검증기 선택함)
+    public String addItemV6(@Validated @ModelAttribute Item item, BindingResult bindingResult, RedirectAttributes redirectAttributes, Model model) {
         // 검증에 실패하면 다시 입력 폼으로
         if(bindingResult.hasErrors()){ // 에러가 있다면
             return "validation/v2/addForm"; // 스프링에서 제공하는 bindingResult는 자동으로 모델에 담겨짐
